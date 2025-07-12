@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打地鼠遊戲</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>打地鼠</h1>
+            <div class="score-board">
+                <div class="level">關卡: <span id="level">1</span></div>
+                <div class="score">分數: <span id="score">0</span></div>
+                <div class="time">時間: <span id="time">60</span>秒</div>
+            </div>
+            <button id="start-btn" class="start-btn">開始遊戲</button>
+        </div>
+        
+        <div class="game-board">
+            <div class="hole" data-index="0">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="1">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="2">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="3">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="4">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="5">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="6">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="7">
+                <div class="mole"></div>
+            </div>
+            <div class="hole" data-index="8">
+                <div class="mole"></div>
+            </div>
+        </div>
+        
+        <div class="level-up" id="level-up">
+            <h2>恭喜過關!</h2>
+            <p>進入第 <span id="next-level">2</span> 關</p>
+            <button id="continue-btn" class="continue-btn">繼續遊戲</button>
+        </div>
+        
+        <div class="victory" id="victory">
+            <h2>🎉 恭喜通關! 🎉</h2>
+            <p>你成功完成了所有關卡!</p>
+            <p>最終分數: <span id="victory-score">0</span></p>
+            <div class="stars">⭐⭐⭐</div>
+            <button id="play-again-btn" class="play-again-btn">重新挑戰</button>
+        </div>
+        
+        <div class="game-over" id="game-over">
+            <h2>遊戲結束!</h2>
+            <p>最終分數: <span id="final-score">0</span></p>
+            <p>達到關卡: <span id="final-level">1</span></p>
+            <button id="restart-btn" class="restart-btn">再玩一次</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
