@@ -18,8 +18,8 @@
                     <div class="drop-zone" id="dropZone">
                         <div class="drop-content">
                             <div class="folder-icon">📁</div>
-                            <p class="drop-text">拖曳影片檔案到此處</p>
-                            <p class="drop-hint">💡 影片長度將自動限制在1分鐘內，請付費解鎖！</p>
+                            <p class="drop-text">拖曳或點選上傳影片檔案到此處</p>
+                            <p class="drop-hint">💡 影片長度將自動限制在30秒內，請付費解鎖！</p>
                         </div>
                         <input type="file" id="fileInput" accept="video/*" style="display: none;">
                     </div>
@@ -27,6 +27,10 @@
                     <div class="premium-section">
                         <button id="unlockBtn" class="unlock-btn">🔓 付費解鎖完整功能</button>
                     </div>
+                </div>
+
+                <div id="reselectSection" style="display: none; text-align: center; margin-top: 1rem;">
+                    <button id="reSelectVideoBtn" class="reselect-btn">🔁 重新選取影片檔案</button>
                 </div>
 
                 <div class="video-player-container" id="videoContainer" style="display: none;">
@@ -98,7 +102,7 @@
                 <button class="close-btn" id="closeModalBtn">&times;</button>
             </div>
             <div class="modal-image">
-                <img src="來都來了.jpg" alt="Premium Features">
+                <img src="images/來都來了.jpg" alt="Premium Features">
             </div>
         </div>
     </div>

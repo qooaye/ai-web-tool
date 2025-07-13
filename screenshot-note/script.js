@@ -28,6 +28,19 @@ class VideoScreenshotTool {
         this.mainContainer = document.querySelector('.container');
         this.resultsPage = document.getElementById('resultsPage');
         this.resultsContainer = document.getElementById('resultsContainer');
+
+        // 重新選取影片按鈕
+        const reSelectBtn = document.getElementById('reSelectVideoBtn');
+        if (reSelectBtn) {
+            reSelectBtn.addEventListener('click', () => {
+                this.resetAll();
+                this.fileInput.value = '';
+                this.dropZone.style.display = '';
+                this.videoContainer.style.display = 'none';
+                this.resultsPage.style.display = 'none';
+                this.mainContainer.style.display = 'block';
+            });
+        }
         this.backToMainBtn = document.getElementById('backToMainBtn');
         this.unlockBtn = document.getElementById('unlockBtn');
         this.premiumModal = document.getElementById('premiumModal');
@@ -48,13 +61,29 @@ class VideoScreenshotTool {
         this.videoPlayer.addEventListener('timeupdate', this.updateCurrentTime.bind(this));
         this.videoPlayer.addEventListener('loadedmetadata', this.onVideoLoaded.bind(this));
 
-
         // Button events
         this.startProcessingBtn.addEventListener('click', this.startProcessing.bind(this));
         this.backToMainBtn.addEventListener('click', this.backToMain.bind(this));
         this.unlockBtn.addEventListener('click', this.showPremiumModal.bind(this));
         this.closeModalBtn.addEventListener('click', this.closePremiumModal.bind(this));
         this.premiumModal.addEventListener('click', this.handleModalBackdropClick.bind(this));
+
+        // 重新選取影片檔案按鈕區塊
+        this.reselectSection = document.getElementById('reselectSection');
+        const reSelectBtn = document.getElementById('reSelectVideoBtn');
+        if (reSelectBtn) {
+            reSelectBtn.addEventListener('click', () => {
+                this.resetAll();
+                this.fileInput.value = '';
+                this.dropZone.style.display = '';
+                this.videoContainer.style.display = 'none';
+                this.resultsPage.style.display = 'none';
+                this.mainContainer.style.display = 'block';
+                if (this.reselectSection) this.reselectSection.style.display = 'none';
+            });
+        }
+        // 一開始隱藏重新選取影片檔案按鈕
+        if (this.reselectSection) this.reselectSection.style.display = 'none';
     }
 
 
@@ -138,9 +167,10 @@ class VideoScreenshotTool {
 
     processFiles(files) {
         const videoFile = files.find(file => file.type.startsWith('video/'));
-        
         if (videoFile) {
             this.loadVideo(videoFile);
+            // 顯示重新選取影片檔案按鈕
+            if (this.reselectSection) this.reselectSection.style.display = '';
         } else {
             alert('請選擇有效的影片檔案');
         }
@@ -171,8 +201,8 @@ class VideoScreenshotTool {
 
     checkVideoDuration() {
         const duration = this.videoPlayer.duration;
-        if (duration > 60) {
-            // 影片超過1分鐘，限制播放時長
+        if (duration > 30) {
+            // 影片超過30秒，限制播放時長
             this.videoPlayer.setAttribute('data-original-duration', duration);
             this.showDurationLimitNotice(duration);
         }
@@ -181,7 +211,7 @@ class VideoScreenshotTool {
     showDurationLimitNotice(originalDuration) {
         const minutes = Math.floor(originalDuration / 60);
         const seconds = Math.floor(originalDuration % 60);
-        alert(`影片長度為 ${minutes}:${seconds.toString().padStart(2, '0')}，已自動限制為1分鐘。\n\n如需處理完整影片，請付費解鎖！`);
+        alert(`影片長度為 ${minutes}:${seconds.toString().padStart(2, '0')}，已自動限制為30秒。\n\n如需處理完整影片，請付費解鎖！`);
     }
 
     updateCurrentTime() {
@@ -268,21 +298,48 @@ class VideoScreenshotTool {
     async startVideoRecognition() {
         return new Promise((resolve, reject) => {
             this.isRecognizing = true;
-            const maxDuration = Math.min(this.videoPlayer.duration, 60); // 限制最多1分鐘
+            const maxDuration = Math.min(this.videoPlayer.duration, 30); // 限制最多30秒
+            
+            // 添加調試信息
+            console.log('開始語音識別，影片長度:', maxDuration, '秒');
+            
+            // 檢查語音識別支援
+            if (!this.recognition) {
+                console.error('語音識別不支援');
+                alert('您的瀏覽器不支援語音識別功能，將產生模擬字幕');
+                this.generateMockSubtitles(maxDuration);
+                resolve();
+                return;
+            }
             
             // 開始語音識別
-            this.recognition.start();
+            try {
+                this.recognition.start();
+                console.log('語音識別已啟動');
+            } catch (error) {
+                console.error('啟動語音識別失敗:', error);
+                this.generateMockSubtitles(maxDuration);
+                resolve();
+                return;
+            }
             
             // 播放影片
             this.videoPlayer.currentTime = 0;
             this.videoPlayer.play();
             
-            // 監聽影片結束或到達1分鐘限制
+            // 監聽影片結束或到達30秒限制
             const onEnded = () => {
                 this.isRecognizing = false;
                 this.recognition.stop();
                 this.videoPlayer.removeEventListener('ended', onEnded);
                 this.videoPlayer.removeEventListener('timeupdate', onTimeUpdate);
+                
+                // 如果沒有捕獲到任何語音，生成模擬字幕
+                if (this.audioChunks.length === 0) {
+                    console.log('未捕獲到語音，生成模擬字幕');
+                    this.generateMockSubtitles(maxDuration);
+                }
+                
                 resolve();
             };
             
@@ -314,13 +371,13 @@ class VideoScreenshotTool {
     async processScreenshots() {
         const interval = parseInt(this.intervalInput.value);
         const originalDuration = this.videoPlayer.duration;
-        const maxDuration = Math.min(originalDuration, 60); // 限制最多1分鐘
+        const maxDuration = Math.min(originalDuration, 30); // 限制最多30秒
         const screenshots = Math.floor(maxDuration / interval);
 
         for (let i = 0; i < screenshots; i++) {
             const time = i * interval;
             
-            // 確保不超過1分鐘限制
+            // 確保不超過30秒限制
             if (time >= maxDuration) break;
             
             // 跳到指定時間
@@ -473,18 +530,67 @@ class VideoScreenshotTool {
     backToMain() {
         this.resultsPage.style.display = 'none';
         this.mainContainer.style.display = 'block';
-        
-        // 重置狀態
+        this.resetAll();
+    }
+
+    resetAll() {
+        // 重置所有狀態，回到初始
         this.results = [];
         this.audioChunks = [];
         this.isRecognizing = false;
+        this.isProcessing = false;
+        this.currentVideo = null;
         if (this.recognition) {
             this.recognition.stop();
         }
+        this.videoPlayer.src = '';
+        this.videoPlayer.load();
+        this.currentTimeSpan.textContent = '00:00:00';
+        if (this.progressFill) this.progressFill.style.width = '0%';
+        if (this.progressText) this.progressText.textContent = '';
+        if (this.reselectSection) this.reselectSection.style.display = 'none';
+
+        // ✅ 清除 file input 的選擇檔案
+        this.fileInput.value = '';
+
+        // ✅ 顯示拖曳區塊
+        this.dropZone.style.display = '';
+
+        // ✅ 隱藏影片播放與結果區
+        this.videoContainer.style.display = 'none';
+        this.resultsPage.style.display = 'none';
     }
 
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    generateMockSubtitles(duration) {
+        // 生成模擬字幕，每10秒一段
+        this.audioChunks = [];
+        const interval = 10;
+        const segments = Math.ceil(duration / interval);
+        
+        const mockTexts = [
+            '歡迎觀看這個影片',
+            '這是自動生成的模擬字幕',
+            '實際使用時會是真實的語音識別結果',
+            '您可以調整截圖間隔來獲得更好的效果',
+            '感謝您的使用'
+        ];
+        
+        for (let i = 0; i < segments; i++) {
+            const time = i * interval;
+            if (time >= duration) break;
+            
+            this.audioChunks.push({
+                text: mockTexts[i % mockTexts.length],
+                time: time,
+                timestamp: this.formatTime(time)
+            });
+        }
+        
+        console.log('已生成模擬字幕:', this.audioChunks);
     }
 
     showPremiumModal() {

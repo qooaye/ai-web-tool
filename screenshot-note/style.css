@@ -946,3 +946,19 @@ main.single-column {
         padding-top: 70px;
     }
 }
+
+.reselect-btn {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    background: linear-gradient(to right, #fbd786, #f7797d);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: background 0.3s ease;
+}
+
+.reselect-btn:hover {
+    background: linear-gradient(to right, #fbc687, #f45c66);
+}
