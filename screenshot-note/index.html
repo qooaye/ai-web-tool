@@ -14,12 +14,19 @@
 
         <main>
             <div class="video-section">
-                <div class="drop-zone" id="dropZone">
-                    <div class="drop-content">
-                        <div class="folder-icon">📁</div>
-                        <p class="drop-text">拖曳影片檔案到此處</p>
+                <div class="upload-area">
+                    <div class="drop-zone" id="dropZone">
+                        <div class="drop-content">
+                            <div class="folder-icon">📁</div>
+                            <p class="drop-text">拖曳影片檔案到此處</p>
+                            <p class="drop-hint">💡 影片長度將自動限制在1分鐘內，請付費解鎖！</p>
+                        </div>
+                        <input type="file" id="fileInput" accept="video/*" style="display: none;">
                     </div>
-                    <input type="file" id="fileInput" accept="video/*" style="display: none;">
+                    
+                    <div class="premium-section">
+                        <button id="unlockBtn" class="unlock-btn">🔓 付費解鎖完整功能</button>
+                    </div>
                 </div>
 
                 <div class="video-player-container" id="videoContainer" style="display: none;">
@@ -34,24 +41,8 @@
             </div>
 
             <div class="notes-section">
-                <div class="section-header">
-                    <label for="imageInput">影片:</label>
-                    <div class="file-info">
-                        <input type="text" id="imageInput" placeholder="未選擇" readonly>
-                        <span class="file-detail">點擊或拖拽影片檔案</span>
-                    </div>
-                </div>
-
-
                 <div class="settings-section">
                     <h3>處理設定</h3>
-                    <div class="settings-row">
-                        <label for="subtitleMethodSelect">字幕產生方式:</label>
-                        <select id="subtitleMethodSelect">
-                            <option value="webspeech">瀏覽器語音識別 (免費)</option>
-                            <option value="manual">手動輸入字幕</option>
-                        </select>
-                    </div>
                     <div class="settings-row">
                         <label for="intervalInput">截圖間隔 (秒):</label>
                         <input type="number" id="intervalInput" value="30" min="1" max="300">
@@ -64,11 +55,7 @@
                             <option value="large">大 (1200px)</option>
                         </select>
                     </div>
-                    <div class="manual-subtitle-input" id="manualSubtitleInput" style="display: none;">
-                        <label for="manualSubtitles">手動輸入字幕:</label>
-                        <textarea id="manualSubtitles" placeholder="請輸入字幕，格式：\n00:00:00 第一段字幕\n00:00:30 第二段字幕\n00:01:00 第三段字幕"></textarea>
-                    </div>
-                    <div class="permission-notice" id="permissionNotice" style="display: none;">
+                    <div class="permission-notice" id="permissionNotice">
                         <div class="notice-content">
                             <span class="notice-icon">🎤</span>
                             <div class="notice-text">
@@ -100,6 +87,19 @@
         
         <div class="results-container" id="resultsContainer">
             <!-- Results will be displayed here -->
+        </div>
+    </div>
+
+    <!-- Premium Modal -->
+    <div class="premium-modal" id="premiumModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>來都來了，不解鎖付費嗎？</h2>
+                <button class="close-btn" id="closeModalBtn">&times;</button>
+            </div>
+            <div class="modal-image">
+                <img src="來都來了.jpg" alt="Premium Features">
+            </div>
         </div>
     </div>
 

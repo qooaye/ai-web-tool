@@ -18,14 +18,10 @@ class VideoScreenshotTool {
         this.videoContainer = document.getElementById('videoContainer');
         this.videoPlayer = document.getElementById('videoPlayer');
         this.currentTimeSpan = document.getElementById('currentTime');
-        this.imageInput = document.getElementById('imageInput');
         this.startProcessingBtn = document.getElementById('startProcessingBtn');
         this.processingProgress = document.getElementById('processingProgress');
         this.progressFill = document.getElementById('progressFill');
         this.progressText = document.getElementById('progressText');
-        this.subtitleMethodSelect = document.getElementById('subtitleMethodSelect');
-        this.manualSubtitleInput = document.getElementById('manualSubtitleInput');
-        this.manualSubtitles = document.getElementById('manualSubtitles');
         this.permissionNotice = document.getElementById('permissionNotice');
         this.intervalInput = document.getElementById('intervalInput');
         this.sizeSelect = document.getElementById('sizeSelect');
@@ -33,6 +29,9 @@ class VideoScreenshotTool {
         this.resultsPage = document.getElementById('resultsPage');
         this.resultsContainer = document.getElementById('resultsContainer');
         this.backToMainBtn = document.getElementById('backToMainBtn');
+        this.unlockBtn = document.getElementById('unlockBtn');
+        this.premiumModal = document.getElementById('premiumModal');
+        this.closeModalBtn = document.getElementById('closeModalBtn');
     }
 
     setupEventListeners() {
@@ -49,25 +48,15 @@ class VideoScreenshotTool {
         this.videoPlayer.addEventListener('timeupdate', this.updateCurrentTime.bind(this));
         this.videoPlayer.addEventListener('loadedmetadata', this.onVideoLoaded.bind(this));
 
-        // Settings events
-        this.subtitleMethodSelect.addEventListener('change', this.updateSubtitleMethod.bind(this));
 
         // Button events
         this.startProcessingBtn.addEventListener('click', this.startProcessing.bind(this));
         this.backToMainBtn.addEventListener('click', this.backToMain.bind(this));
+        this.unlockBtn.addEventListener('click', this.showPremiumModal.bind(this));
+        this.closeModalBtn.addEventListener('click', this.closePremiumModal.bind(this));
+        this.premiumModal.addEventListener('click', this.handleModalBackdropClick.bind(this));
     }
 
-    updateSubtitleMethod() {
-        const method = this.subtitleMethodSelect.value;
-        
-        if (method === 'manual') {
-            this.manualSubtitleInput.style.display = 'block';
-            this.permissionNotice.style.display = 'none';
-        } else {
-            this.manualSubtitleInput.style.display = 'none';
-            this.permissionNotice.style.display = 'block';
-        }
-    }
 
     initializeSpeechRecognition() {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -159,7 +148,6 @@ class VideoScreenshotTool {
 
     loadVideo(file) {
         this.currentVideo = file;
-        this.imageInput.value = file.name;
         
         const videoURL = URL.createObjectURL(file);
         this.videoPlayer.src = videoURL;
@@ -178,6 +166,22 @@ class VideoScreenshotTool {
 
     onVideoLoaded() {
         console.log('影片已載入:', this.videoPlayer.duration);
+        this.checkVideoDuration();
+    }
+
+    checkVideoDuration() {
+        const duration = this.videoPlayer.duration;
+        if (duration > 60) {
+            // 影片超過1分鐘，限制播放時長
+            this.videoPlayer.setAttribute('data-original-duration', duration);
+            this.showDurationLimitNotice(duration);
+        }
+    }
+
+    showDurationLimitNotice(originalDuration) {
+        const minutes = Math.floor(originalDuration / 60);
+        const seconds = Math.floor(originalDuration % 60);
+        alert(`影片長度為 ${minutes}:${seconds.toString().padStart(2, '0')}，已自動限制為1分鐘。\n\n如需處理完整影片，請付費解鎖！`);
     }
 
     updateCurrentTime() {
@@ -203,8 +207,6 @@ class VideoScreenshotTool {
             return;
         }
 
-        const method = this.subtitleMethodSelect.value;
-
         this.isProcessing = true;
         this.startProcessingBtn.disabled = true;
         this.startProcessingBtn.textContent = '🔄 處理中...';
@@ -213,11 +215,7 @@ class VideoScreenshotTool {
         this.audioChunks = [];
 
         try {
-            if (method === 'webspeech') {
-                await this.processWithWebSpeech();
-            } else {
-                await this.processWithManualSubtitles();
-            }
+            await this.processWithWebSpeech();
 
             // 完成，跳轉到結果頁面
             this.progressFill.style.width = '100%';
@@ -266,68 +264,11 @@ class VideoScreenshotTool {
         await this.translateAllSubtitles();
     }
 
-    async processWithManualSubtitles() {
-        const manualText = this.manualSubtitles.value.trim();
-        if (!manualText) {
-            throw new Error('請輸入手動字幕內容');
-        }
-
-        // 解析手動輸入的字幕
-        this.progressText.textContent = '正在解析手動字幕...';
-        this.progressFill.style.width = '20%';
-        
-        this.parseManualSubtitles(manualText);
-        
-        // 按間隔截圖並對應字幕
-        this.progressText.textContent = '正在進行截圖處理...';
-        this.progressFill.style.width = '50%';
-        
-        await this.processScreenshots();
-        
-        // 翻譯字幕
-        this.progressText.textContent = '正在翻譯字幕...';
-        this.progressFill.style.width = '80%';
-        
-        await this.translateAllSubtitles();
-    }
-
-    parseManualSubtitles(text) {
-        const lines = text.split('\n').filter(line => line.trim());
-        this.audioChunks = [];
-        
-        lines.forEach(line => {
-            // 支援格式：00:00:00 字幕內容 或 直接是字幕內容
-            const timeMatch = line.match(/^(\d{2}:\d{2}:\d{2})\s+(.+)$/);
-            if (timeMatch) {
-                const [, timeStr, text] = timeMatch;
-                const time = this.parseTimeToSeconds(timeStr);
-                this.audioChunks.push({
-                    text: text.trim(),
-                    time: time,
-                    timestamp: timeStr
-                });
-            } else {
-                // 如果沒有時間戳記，平均分配到影片中
-                const index = this.audioChunks.length;
-                const duration = this.videoPlayer.duration;
-                const time = (duration / lines.length) * index;
-                this.audioChunks.push({
-                    text: line.trim(),
-                    time: time,
-                    timestamp: this.formatTime(time)
-                });
-            }
-        });
-    }
-
-    parseTimeToSeconds(timeStr) {
-        const [hours, minutes, seconds] = timeStr.split(':').map(Number);
-        return hours * 3600 + minutes * 60 + seconds;
-    }
 
     async startVideoRecognition() {
         return new Promise((resolve, reject) => {
             this.isRecognizing = true;
+            const maxDuration = Math.min(this.videoPlayer.duration, 60); // 限制最多1分鐘
             
             // 開始語音識別
             this.recognition.start();
@@ -336,20 +277,29 @@ class VideoScreenshotTool {
             this.videoPlayer.currentTime = 0;
             this.videoPlayer.play();
             
-            // 監聽影片結束
+            // 監聽影片結束或到達1分鐘限制
             const onEnded = () => {
                 this.isRecognizing = false;
                 this.recognition.stop();
                 this.videoPlayer.removeEventListener('ended', onEnded);
+                this.videoPlayer.removeEventListener('timeupdate', onTimeUpdate);
                 resolve();
             };
             
+            const onTimeUpdate = () => {
+                if (this.videoPlayer.currentTime >= maxDuration) {
+                    this.videoPlayer.pause();
+                    onEnded();
+                }
+            };
+            
             this.videoPlayer.addEventListener('ended', onEnded);
+            this.videoPlayer.addEventListener('timeupdate', onTimeUpdate);
             
             // 更新進度
             const updateProgress = () => {
                 if (this.videoPlayer.duration) {
-                    const progress = 20 + (this.videoPlayer.currentTime / this.videoPlayer.duration) * 30;
+                    const progress = 20 + (Math.min(this.videoPlayer.currentTime, maxDuration) / maxDuration) * 30;
                     this.progressFill.style.width = `${progress}%`;
                 }
                 
@@ -363,11 +313,15 @@ class VideoScreenshotTool {
 
     async processScreenshots() {
         const interval = parseInt(this.intervalInput.value);
-        const duration = this.videoPlayer.duration;
-        const screenshots = Math.floor(duration / interval);
+        const originalDuration = this.videoPlayer.duration;
+        const maxDuration = Math.min(originalDuration, 60); // 限制最多1分鐘
+        const screenshots = Math.floor(maxDuration / interval);
 
         for (let i = 0; i < screenshots; i++) {
             const time = i * interval;
+            
+            // 確保不超過1分鐘限制
+            if (time >= maxDuration) break;
             
             // 跳到指定時間
             this.videoPlayer.currentTime = time;
@@ -377,14 +331,15 @@ class VideoScreenshotTool {
             const screenshot = this.captureScreenshot();
             
             // 獲取該時間段的字幕
-            const subtitleText = this.getSubtitleForTimeRange(time, time + interval);
+            const endTime = Math.min(time + interval, maxDuration);
+            const subtitleText = this.getSubtitleForTimeRange(time, endTime);
             
             // 創建結果項目
             const resultItem = {
                 id: Date.now() + i,
                 time: time,
-                endTime: time + interval,
-                timestamp: `${this.formatTime(time)} - ${this.formatTime(time + interval)}`,
+                endTime: endTime,
+                timestamp: `${this.formatTime(time)} - ${this.formatTime(endTime)}`,
                 screenshot: screenshot,
                 originalSubtitle: subtitleText,
                 translatedSubtitle: null
@@ -530,6 +485,22 @@ class VideoScreenshotTool {
 
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    showPremiumModal() {
+        this.premiumModal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    closePremiumModal() {
+        this.premiumModal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    handleModalBackdropClick(e) {
+        if (e.target === this.premiumModal) {
+            this.closePremiumModal();
+        }
     }
 }
 
