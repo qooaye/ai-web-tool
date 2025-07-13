@@ -122,6 +122,7 @@ class VideoScreenshotTool {
                     timestamp: this.formatTime(currentTime)
                 });
             }
+            console.log('>>>>語音識別結果:', finalTranscript.trim());
         };
 
         this.recognition.onerror = (event) => {
