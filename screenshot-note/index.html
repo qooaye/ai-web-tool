@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>screenshot-note</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>screenshot-note</h1>
+        </header>
+
+        <main>
+            <div class="video-section">
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-content">
+                        <div class="folder-icon">📁</div>
+                        <p class="drop-text">拖曳影片和字幕檔案到此處</p>
+                        <p class="drop-subtext">支援同時拖曳多多個檔案</p>
+                    </div>
+                    <input type="file" id="fileInput" accept="video/*" multiple style="display: none;">
+                </div>
+
+                <div class="video-player-container" id="videoContainer" style="display: none;">
+                    <video id="videoPlayer" controls>
+                        您的瀏覽器不支援影片播放。
+                        <track kind="subtitles" id="subtitleTrack" srclang="zh" label="Chinese" default>
+                    </video>
+                    <div class="video-controls">
+                        <button id="screenshotBtn" class="screenshot-btn">📸 截圖</button>
+                        <button id="generateSubBtn" class="generate-sub-btn">🎤 產生字幕</button>
+                        <span class="timestamp" id="currentTime">00:00:00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="notes-section">
+                <div class="section-header">
+                    <label for="imageInput">影片:</label>
+                    <div class="file-info">
+                        <input type="text" id="imageInput" placeholder="未選擇" readonly>
+                        <span class="file-detail">點擊或拖拽影片檔案</span>
+                    </div>
+                </div>
+
+                <div class="subtitle-section">
+                    <div class="section-header">
+                        <label for="subtitleTextarea">自動產生字幕:</label>
+                        <div class="subtitle-controls">
+                            <select id="sourceLanguageSelect">
+                                <option value="en-US">English (英文)</option>
+                                <option value="zh-TW">繁體中文</option>
+                                <option value="zh-CN">簡體中文</option>
+                                <option value="ja-JP">日本語</option>
+                            </select>
+                            <span class="arrow">→</span>
+                            <select id="targetLanguageSelect">
+                                <option value="zh-TW">繁體中文</option>
+                                <option value="zh-CN">簡體中文</option>
+                                <option value="en-US">English</option>
+                                <option value="ja-JP">日本語</option>
+                            </select>
+                            <button id="startSubBtn" class="start-sub-btn">🎤 開始識別+翻譯</button>
+                            <button id="stopSubBtn" class="stop-sub-btn" style="display: none;">⏹️ 停止識別</button>
+                            <button id="translateBtn" class="translate-btn">🌐 翻譯現有字幕</button>
+                        </div>
+                    </div>
+                    <div class="subtitle-tabs">
+                        <button class="tab-btn active" data-tab="original">原文字幕</button>
+                        <button class="tab-btn" data-tab="translated">翻譯字幕</button>
+                    </div>
+                    <textarea id="originalSubtitleTextarea" class="subtitle-textarea active" placeholder="點擊『開始識別』自動產生字幕..."></textarea>
+                    <textarea id="translatedSubtitleTextarea" class="subtitle-textarea" placeholder="翻譯後的字幕會顯示在這裡..." style="display: none;"></textarea>
+                    <div class="subtitle-progress" id="subtitleProgress" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <span class="progress-text" id="progressText">正在識別語音...</span>
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <label for="notesTextarea">筆記:</label>
+                    <textarea id="notesTextarea" placeholder="在此輸入筆記內容，支援 Markdown 語法..."></textarea>
+                </div>
+
+                <div class="screenshots-gallery" id="screenshotsGallery">
+                    <!-- Screenshots will be added here -->
+                </div>
+
+                <div class="action-buttons">
+                    <button id="exportSubBtn" class="export-sub-btn">📄 匯出字幕</button>
+                    <button id="exportBtn" class="export-btn">📄 匯出筆記</button>
+                    <button id="clearBtn" class="clear-btn">🗑️ 清除所有</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
