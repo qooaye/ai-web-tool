@@ -962,3 +962,11 @@ main.single-column {
 .reselect-btn:hover {
     background: linear-gradient(to right, #fbc687, #f45c66);
 }
+
+.reselect-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    opacity: 0.5;
+}

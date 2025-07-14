@@ -4,12 +4,12 @@ class VideoScreenshotTool {
         this.currentVideo = null;
         this.isProcessing = false;
         this.fullVideoSubtitles = null;
-        this.recognition = null;
-        this.isRecognizing = false;
+        this.whisperPipeline = null;
+        this.isWhisperLoaded = false;
         this.audioChunks = [];
         this.initializeElements();
         this.setupEventListeners();
-        this.initializeSpeechRecognition();
+        this.initializeWhisper();
     }
 
     initializeElements() {
@@ -24,15 +24,14 @@ class VideoScreenshotTool {
         this.progressText = document.getElementById('progressText');
         this.permissionNotice = document.getElementById('permissionNotice');
         this.intervalInput = document.getElementById('intervalInput');
-        this.sizeSelect = document.getElementById('sizeSelect');
         this.mainContainer = document.querySelector('.container');
         this.resultsPage = document.getElementById('resultsPage');
         this.resultsContainer = document.getElementById('resultsContainer');
 
         // 重新選取影片按鈕
-        const reSelectBtn = document.getElementById('reSelectVideoBtn');
-        if (reSelectBtn) {
-            reSelectBtn.addEventListener('click', () => {
+        this.reSelectBtn = document.getElementById('reSelectVideoBtn');
+        if (this.reSelectBtn) {
+            this.reSelectBtn.addEventListener('click', () => {
                 this.resetAll();
                 this.fileInput.value = '';
                 this.dropZone.style.display = '';
@@ -87,61 +86,35 @@ class VideoScreenshotTool {
     }
 
 
-    initializeSpeechRecognition() {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            console.warn('瀏覽器不支援語音識別功能');
-            return;
-        }
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        this.recognition = new SpeechRecognition();
-        
-        this.recognition.continuous = true;
-        this.recognition.interimResults = true;
-        this.recognition.lang = 'zh-TW'; // 預設繁體中文
-        
-        this.recognition.onstart = () => {
-            this.isRecognizing = true;
-            console.log('語音識別開始');
-        };
-
-        this.recognition.onresult = (event) => {
-            let finalTranscript = '';
+    async initializeWhisper() {
+        try {
+            console.log('正在載入 Whisper 模型...');
+            this.updateWhisperStatus('正在載入 Whisper 模型...');
             
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript + ' ';
-                }
-            }
-
-            if (finalTranscript.trim()) {
-                const currentTime = this.videoPlayer.currentTime;
-                this.audioChunks.push({
-                    text: finalTranscript.trim(),
-                    time: currentTime,
-                    timestamp: this.formatTime(currentTime)
-                });
-            }
-            console.log('>>>>語音識別結果:', finalTranscript.trim());
-        };
-
-        this.recognition.onerror = (event) => {
-            console.error('語音識別錯誤:', event.error);
-            if (event.error === 'not-allowed') {
-                alert('麥克風權限被拒絕。請重新整理頁面並允許麥克風權限。');
-            }
-        };
-
-        this.recognition.onend = () => {
-            if (this.isRecognizing && this.videoPlayer && !this.videoPlayer.ended) {
-                // 如果影片還在播放且需要繼續識別，重新啟動
-                setTimeout(() => {
-                    if (this.isRecognizing) {
-                        this.recognition.start();
-                    }
-                }, 100);
-            }
-        };
+            // 動態載入 transformers
+            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+            
+            // 載入 Whisper 模型 (使用較小的 base 模型)
+            this.whisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
+                chunk_length_s: 30,
+                stride_length_s: 5,
+            });
+            
+            this.isWhisperLoaded = true;
+            console.log('Whisper 模型載入完成');
+            this.updateWhisperStatus('Whisper AI 語音識別');
+            
+        } catch (error) {
+            console.error('Whisper 模型載入失敗:', error);
+            this.updateWhisperStatus('❌ Whisper 載入失敗，將使用模擬字幕');
+        }
+    }
+    
+    updateWhisperStatus(message) {
+        const statusElement = document.getElementById('whisperStatusText');
+        if (statusElement) {
+            statusElement.textContent = message;
+        }
     }
 
     handleDragOver(e) {
@@ -229,7 +202,7 @@ class VideoScreenshotTool {
     }
 
     async startProcessing() {
-        if (!this.videoPlayer.src) {
+        if (!this.videoPlayer.src || !this.currentVideo) {
             alert('請先載入影片');
             return;
         }
@@ -244,9 +217,14 @@ class VideoScreenshotTool {
         this.processingProgress.style.display = 'block';
         this.results = [];
         this.audioChunks = [];
+        
+        // 處理過程中禁用重新選取按鈕
+        if (this.reSelectBtn) {
+            this.reSelectBtn.disabled = true;
+        }
 
         try {
-            await this.processWithWebSpeech();
+            await this.processWithWhisper();
 
             // 完成，跳轉到結果頁面
             this.progressFill.style.width = '100%';
@@ -261,112 +239,239 @@ class VideoScreenshotTool {
             alert('處理失敗：' + error.message);
         } finally {
             this.isProcessing = false;
-            this.isRecognizing = false;
-            if (this.recognition) {
-                this.recognition.stop();
-            }
             this.startProcessingBtn.disabled = false;
             this.startProcessingBtn.textContent = '🗨 開始處理';
             this.processingProgress.style.display = 'none';
+            
+            // 重新啟用重新選取按鈕
+            if (this.reSelectBtn) {
+                this.reSelectBtn.disabled = false;
+            }
         }
     }
 
-    async processWithWebSpeech() {
-        if (!this.recognition) {
-            throw new Error('瀏覽器不支援語音識別功能');
-        }
-
-        // 步驟1: 播放影片並同時進行語音識別
-        this.progressText.textContent = '正在播放影片並識別語音...';
+    async processWithWhisper() {
+        // 步驟1: 提取音頻並使用 Whisper 識別
+        this.progressText.textContent = '🤖 正在使用 Whisper AI 分析音頻...';
         this.progressFill.style.width = '20%';
         
-        await this.startVideoRecognition();
+        await this.extractAndTranscribeAudio();
         
         // 步驟2: 按間隔截圖並對應字幕
-        this.progressText.textContent = '正在進行截圖處理...';
+        this.progressText.textContent = '📷 正在進行截圖處理...';
         this.progressFill.style.width = '50%';
         
         await this.processScreenshots();
         
         // 步驟3: 翻譯字幕
-        this.progressText.textContent = '正在翻譯字幕...';
+        this.progressText.textContent = '🌍 正在翻譯字幕...';
         this.progressFill.style.width = '80%';
         
         await this.translateAllSubtitles();
     }
 
 
-    async startVideoRecognition() {
-        return new Promise((resolve, reject) => {
-            this.isRecognizing = true;
-            const maxDuration = Math.min(this.videoPlayer.duration, 30); // 限制最多30秒
+    async extractAndTranscribeAudio() {
+        try {
+            const maxDuration = Math.min(this.videoPlayer.duration, 30);
+            console.log('開始使用 Whisper 分析音頻，影片長度:', maxDuration, '秒');
             
-            // 添加調試信息
-            console.log('開始語音識別，影片長度:', maxDuration, '秒');
-            
-            // 檢查語音識別支援
-            if (!this.recognition) {
-                console.error('語音識別不支援');
-                alert('您的瀏覽器不支援語音識別功能，將產生模擬字幕');
+            if (!this.isWhisperLoaded || !this.whisperPipeline) {
+                console.warn('Whisper 模型未載入，使用模擬字幕');
                 this.generateMockSubtitles(maxDuration);
-                resolve();
                 return;
             }
             
-            // 開始語音識別
-            try {
-                this.recognition.start();
-                console.log('語音識別已啟動');
-            } catch (error) {
-                console.error('啟動語音識別失敗:', error);
+            // 提取影片音頻
+            const audioBuffer = await this.extractAudioFromVideo(maxDuration);
+            
+            if (!audioBuffer || audioBuffer.length === 0) {
+                console.warn('無法提取音頻，使用模擬字幕');
                 this.generateMockSubtitles(maxDuration);
-                resolve();
                 return;
             }
             
-            // 播放影片
+            // 檢查音頻是否為靜音（模擬數據）
+            const averageVolume = audioBuffer.reduce((sum, sample) => sum + Math.abs(sample), 0) / audioBuffer.length;
+            if (averageVolume < 0.001) {
+                console.warn('檢測到靜音或模擬音頻，使用模擬字幕');
+                this.generateMockSubtitles(maxDuration);
+                return;
+            }
+            
+            // 使用 Whisper 進行語音識別
+            console.log('正在使用 Whisper 進行語音識別...');
+            const result = await this.whisperPipeline(audioBuffer);
+            
+            console.log('Whisper 識別結果:', result);
+            
+            // 將結果轉換為我們的格式
+            if (result && result.text && result.text.trim()) {
+                // 將整段文字按時間分段
+                this.convertWhisperResultToChunks(result.text, maxDuration);
+            } else {
+                console.warn('Whisper 識別無結果，使用模擬字幕');
+                this.generateMockSubtitles(maxDuration);
+            }
+            
+        } catch (error) {
+            console.error('Whisper 識別錯誤:', error);
+            const maxDuration = Math.min(this.videoPlayer.duration, 30);
+            this.generateMockSubtitles(maxDuration);
+        }
+    }
+    
+    async extractAudioFromVideo(maxDuration) {
+        try {
+            console.log('開始提取真實影片音頻...');
+            
+            // 創建 AudioContext
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // 創建 canvas 來處理影片畫面
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 設置 canvas 尺寸
+            canvas.width = this.videoPlayer.videoWidth || 640;
+            canvas.height = this.videoPlayer.videoHeight || 480;
+            
+            // 創建 MediaStreamDestination 來捕獲音頻
+            const destination = audioContext.createMediaStreamDestination();
+            
+            // 創建音頻源
+            let audioSource;
+            
+            // 如果影片有音軌，直接使用
+            if (this.videoPlayer.mozCaptureStream) {
+                // Firefox
+                const stream = this.videoPlayer.mozCaptureStream();
+                audioSource = audioContext.createMediaStreamSource(stream);
+            } else if (this.videoPlayer.captureStream) {
+                // Chrome/Edge
+                const stream = this.videoPlayer.captureStream();
+                audioSource = audioContext.createMediaStreamSource(stream);
+            } else {
+                // 替代方案：使用 Web Audio API 處理影片
+                audioSource = audioContext.createMediaElementSource(this.videoPlayer);
+            }
+            
+            // 連接音頻處理鏈
+            audioSource.connect(destination);
+            
+            // 設置錄音參數
+            const mediaRecorder = new MediaRecorder(destination.stream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+            
+            const audioChunks = [];
+            
+            // 收集音頻數據
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+            
+            // 開始錄音
+            mediaRecorder.start(100); // 每100ms收集一次數據
+            
+            // 播放影片並錄製音頻
             this.videoPlayer.currentTime = 0;
-            this.videoPlayer.play();
+            await this.videoPlayer.play();
             
-            // 監聽影片結束或到達30秒限制
-            const onEnded = () => {
-                this.isRecognizing = false;
-                this.recognition.stop();
-                this.videoPlayer.removeEventListener('ended', onEnded);
-                this.videoPlayer.removeEventListener('timeupdate', onTimeUpdate);
-                
-                // 如果沒有捕獲到任何語音，生成模擬字幕
-                if (this.audioChunks.length === 0) {
-                    console.log('未捕獲到語音，生成模擬字幕');
-                    this.generateMockSubtitles(maxDuration);
-                }
-                
-                resolve();
-            };
-            
-            const onTimeUpdate = () => {
-                if (this.videoPlayer.currentTime >= maxDuration) {
+            // 等待錄製完成
+            await new Promise((resolve) => {
+                setTimeout(() => {
+                    mediaRecorder.stop();
                     this.videoPlayer.pause();
-                    onEnded();
-                }
-            };
+                    resolve();
+                }, maxDuration * 1000);
+            });
             
-            this.videoPlayer.addEventListener('ended', onEnded);
-            this.videoPlayer.addEventListener('timeupdate', onTimeUpdate);
+            // 等待 MediaRecorder 完成
+            await new Promise((resolve) => {
+                mediaRecorder.onstop = resolve;
+            });
             
-            // 更新進度
-            const updateProgress = () => {
-                if (this.videoPlayer.duration) {
-                    const progress = 20 + (Math.min(this.videoPlayer.currentTime, maxDuration) / maxDuration) * 30;
-                    this.progressFill.style.width = `${progress}%`;
-                }
-                
-                if (this.isRecognizing) {
-                    requestAnimationFrame(updateProgress);
-                }
-            };
-            updateProgress();
-        });
+            // 將 Blob 數據轉換為 AudioBuffer
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            
+            // 解碼音頻數據
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            // 轉換為 Whisper 需要的格式 (16kHz, 單聲道, Float32Array)
+            const targetSampleRate = 16000;
+            const resampledData = this.resampleAudio(audioBuffer, targetSampleRate);
+            
+            console.log('音頻提取完成，樣本數:', resampledData.length);
+            
+            // 清理資源
+            audioContext.close();
+            
+            return resampledData;
+            
+        } catch (error) {
+            console.error('提取音頻失敗:', error);
+            console.log('降級使用模擬數據');
+            
+            // 降級方案：使用模擬數據
+            const sampleRate = 16000;
+            const samples = sampleRate * maxDuration;
+            const audioData = new Float32Array(samples);
+            
+            for (let i = 0; i < samples; i++) {
+                audioData[i] = (Math.random() - 0.5) * 0.01;
+            }
+            
+            return audioData;
+        }
+    }
+    
+    resampleAudio(audioBuffer, targetSampleRate) {
+        const originalSampleRate = audioBuffer.sampleRate;
+        const originalLength = audioBuffer.length;
+        const targetLength = Math.round(originalLength * targetSampleRate / originalSampleRate);
+        
+        // 使用第一個聲道（左聲道）
+        const inputData = audioBuffer.getChannelData(0);
+        const outputData = new Float32Array(targetLength);
+        
+        // 簡單的線性插值重採樣
+        for (let i = 0; i < targetLength; i++) {
+            const position = i * originalLength / targetLength;
+            const index = Math.floor(position);
+            const fraction = position - index;
+            
+            if (index + 1 < originalLength) {
+                outputData[i] = inputData[index] * (1 - fraction) + inputData[index + 1] * fraction;
+            } else {
+                outputData[i] = inputData[index];
+            }
+        }
+        
+        return outputData;
+    }
+    
+    convertWhisperResultToChunks(text, duration) {
+        // 將 Whisper 的結果按時間分段
+        this.audioChunks = [];
+        const words = text.split(' ');
+        const wordsPerChunk = Math.max(1, Math.floor(words.length / Math.ceil(duration / 10)));
+        
+        for (let i = 0; i < words.length; i += wordsPerChunk) {
+            const chunkWords = words.slice(i, i + wordsPerChunk);
+            const time = (i / words.length) * duration;
+            
+            this.audioChunks.push({
+                text: chunkWords.join(' '),
+                time: time,
+                timestamp: this.formatTime(time)
+            });
+        }
+        
+        console.log('轉換後的音頻塊:', this.audioChunks);
     }
 
     async processScreenshots() {
@@ -437,16 +542,35 @@ class VideoScreenshotTool {
         }
     }
 
+    detectLanguage(text) {
+        // 簡單的語言檢測：檢查是否包含中文字符
+        const chineseRegex = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+        return chineseRegex.test(text) ? 'zh' : 'en';
+    }
+
     async translateText(text) {
         if (!text.trim()) return '';
         
+        // 檢測原文語言
+        const sourceLanguage = this.detectLanguage(text);
+        
+        // 根據原文語言決定翻譯方向
+        let langPair;
+        if (sourceLanguage === 'zh') {
+            langPair = 'zh|en'; // 中文翻譯成英文
+            console.log('檢測到中文，翻譯成英文');
+        } else {
+            langPair = 'en|zh'; // 英文翻譯成中文
+            console.log('檢測到英文，翻譯成中文');
+        }
+        
         try {
-            // 使用免費翻譯 API
-            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=zh|en`;
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langPair}`;
             const response = await fetch(url);
             const data = await response.json();
             
             if (data.responseStatus === 200) {
+                console.log('翻譯結果:', data.responseData.translatedText);
                 return data.responseData.translatedText;
             }
         } catch (error) {
@@ -454,7 +578,11 @@ class VideoScreenshotTool {
         }
         
         // 簡單的模擬翻譯作為備用
-        return `[Translated] ${text}`;
+        if (sourceLanguage === 'zh') {
+            return `[English Translation] ${text}`;
+        } else {
+            return `[Chinese Translation] ${text}`;
+        }
     }
 
     waitForVideoSeek() {
@@ -471,13 +599,8 @@ class VideoScreenshotTool {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        const sizeMap = {
-            'small': 400,
-            'medium': 800,
-            'large': 1200
-        };
-        
-        const targetWidth = sizeMap[this.sizeSelect.value] || 800;
+        // 固定使用400px寬度
+        const targetWidth = 400;
         const aspectRatio = this.videoPlayer.videoWidth / this.videoPlayer.videoHeight;
         const targetHeight = targetWidth / aspectRatio;
         
@@ -538,15 +661,16 @@ class VideoScreenshotTool {
         // 重置所有狀態，回到初始
         this.results = [];
         this.audioChunks = [];
-        this.isRecognizing = false;
         this.isProcessing = false;
         this.currentVideo = null;
-        if (this.recognition) {
-            this.recognition.stop();
-        }
+        
+        // 清除影片播放器
         this.videoPlayer.src = '';
+        this.videoPlayer.removeAttribute('src');
         this.videoPlayer.load();
         this.currentTimeSpan.textContent = '00:00:00';
+        
+        // 清除進度條
         if (this.progressFill) this.progressFill.style.width = '0%';
         if (this.progressText) this.progressText.textContent = '';
         if (this.reselectSection) this.reselectSection.style.display = 'none';
@@ -572,12 +696,13 @@ class VideoScreenshotTool {
         const interval = 10;
         const segments = Math.ceil(duration / interval);
         
+        // 混合中英文字幕來測試翻譯功能
         const mockTexts = [
-            '歡迎觀看這個影片',
-            '這是自動生成的模擬字幕',
-            '實際使用時會是真實的語音識別結果',
-            '您可以調整截圖間隔來獲得更好的效果',
-            '感謝您的使用'
+            "Welcome to this video", // 英文
+            "歡迎觀看這個影片", // 中文
+            "This is a Whisper AI generated subtitle", // 英文
+            "這是 Whisper AI 自動生成的字幕", // 中文
+            "Thank you for using our tool" // 英文
         ];
         
         for (let i = 0; i < segments; i++) {

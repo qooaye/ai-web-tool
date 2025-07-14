@@ -51,20 +51,12 @@
                         <label for="intervalInput">截圖間隔 (秒):</label>
                         <input type="number" id="intervalInput" value="10" min="1" max="300">
                     </div>
-                    <div class="settings-row">
-                        <label for="sizeSelect">截圖大小:</label>
-                        <select id="sizeSelect">
-                            <option value="small">小 (400px)</option>
-                            <option value="medium" selected>中 (800px)</option>
-                            <option value="large">大 (1200px)</option>
-                        </select>
-                    </div>
-                    <div class="permission-notice" id="permissionNotice">
+                    <div class="permission-notice" id="whisperStatus">
                         <div class="notice-content">
-                            <span class="notice-icon">🎤</span>
+                            <span class="notice-icon">🤖</span>
                             <div class="notice-text">
-                                <strong>需要麥克風權限</strong>
-                                <p>請允許使用麥克風來識別影片中的語音。點擊「開始處理」時會要求權限。</p>
+                                <strong id="whisperStatusText">正在載入 Whisper AI 模型...</strong>
+                                <p>Whisper 模型已載入，可以開始處理</p>
                             </div>
                         </div>
                     </div>
